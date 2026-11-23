@@ -1,14 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.portsps2.app"
-    android:versionCode="3"
-    android:versionName="1.2">
+    android:versionCode="4"
+    android:versionName="1.3">
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Método legacy de accesos directos en la pantalla de inicio -->
+    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
 
     <uses-sdk
         android:minSdkVersion="26"
         android:targetSdkVersion="34" />
+
+    <!-- Android 11+: sin esto no se pueden detectar los emuladores instalados -->
+    <queries>
+        <package android:name="xyz.aethersx2.android" />
+        <package android:name="xyz.aethersx2.tturnip" />
+        <package android:name="xyz.trizle.nethersx2" />
+        <package android:name="com.armsx2" />
+        <package android:name="com.virtualapplications.play" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+        </intent>
+    </queries>
 
     <application
         android:label="Ports PS2"
@@ -30,5 +44,13 @@
             android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Sirve los juegos porteados (files/games/) a los emuladores por
+             content URI, con permiso temporal. No exportado. -->
+        <provider
+            android:name=".GameFileProvider"
+            android:authorities="com.portsps2.app.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

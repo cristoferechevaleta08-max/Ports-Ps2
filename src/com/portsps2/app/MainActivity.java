@@ -59,7 +59,9 @@ public class MainActivity extends Activity {
         TextView sub = new TextView(this);
         sub.setText("Tu pantalla de juegos tipo nativo. Al importar un ZIP o una ISO, el juego "
                 + "se PORTEA de verdad: la imagen queda instalada dentro de la app, en su propia carpeta.\n"
-                + "Nota honesta: esta app es el importador/launcher. No incluye un emulador de PS2.");
+                + "Nota honesta: esta app es el importador/launcher. No incluye un emulador "
+                + "de PS2: al tocar Jugar, el juego se abre en el motor que tengas instalado "
+                + "(AetherSX2, NetherSX2, ARMSX2 o Play!).");
         sub.setTextSize(14);
         sub.setTextColor(Color.rgb(180, 180, 190));
         sub.setPadding(0, 12, 0, 20);

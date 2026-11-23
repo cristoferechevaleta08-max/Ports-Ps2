@@ -52,7 +52,7 @@ echo "==> aapt2 link (manifest + recursos)"
   --manifest AndroidManifest.xml \
   --java "$BUILD/gen" \
   --min-sdk-version 26 --target-sdk-version 34 \
-  --version-code 3 --version-name "1.2"
+  --version-code 4 --version-name "1.3"
 
 echo "==> javac"
 find src "$BUILD/gen" -name "*.java" > "$BUILD/sources.txt"

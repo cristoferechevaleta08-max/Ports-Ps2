@@ -2,6 +2,7 @@ package com.portsps2.app;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,11 +18,20 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Vista del juego a pantalla completa, estilo "tipo nativo":
- * mando de PS2 COMPLETO en pantalla (L1/L2, R1/R2, cruceta, △ □ ○ ✕ con sus
- * colores clásicos, START/SELECT y dos sticks analógicos táctiles con L3/R3),
+ * Vista de controles a pantalla completa: el mando de PS2 de referencia
+ * (L1/L2, R1/R2, cruceta en cruz, △ □ ○ ✕ circulares con sus colores
+ * clásicos, START/SELECT y dos sticks analógicos táctiles con L3/R3),
  * cronómetro de sesión y guardado rápido.
- * Alcance honesto: es la vista/launcher del juego; no ejecuta emulación de PS2.
+ *
+ * Layout v1.3: FrameLayout con posicionamiento absoluto y tamaños FIJOS
+ * en dp (antes era un LinearLayout que estiraba los botones y cortaba
+ * los de los bordes). Todo entra en una pantalla landscape típica de
+ * celular (~800x360 dp): cruceta arriba-izquierda, stick izquierdo
+ * abajo-izquierda, rombo de acciones arriba-derecha, stick derecho
+ * abajo-derecha, sin superposiciones.
+ *
+ * Alcance honesto: esta es la vista del mando de referencia. El juego se
+ * abre en el motor de PS2 instalado, desde el botón Jugar de su ficha.
  */
 public class PlayerActivity extends Activity {
     private Game game;
@@ -40,6 +50,18 @@ public class PlayerActivity extends Activity {
         }
     };
 
+    private int dp(float v) {
+        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private FrameLayout.LayoutParams flp(int wDp, int hDp, int gravity,
+                                         int left, int top, int right, int bottom) {
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(wDp), dp(hDp));
+        lp.gravity = gravity;
+        lp.setMargins(dp(left), dp(top), dp(right), dp(bottom));
+        return lp;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -55,18 +77,20 @@ public class PlayerActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
 
-        // Centro: nombre del juego + aviso honesto + cronómetro + último input
+        // ---- Centro: nombre + aviso + cronómetro + último input ------------
         LinearLayout center = new LinearLayout(this);
         center.setOrientation(LinearLayout.VERTICAL);
         center.setGravity(Gravity.CENTER);
         TextView name = new TextView(this);
         name.setText(game.name);
-        name.setTextSize(28);
+        name.setTextSize(22);
         name.setTextColor(Color.WHITE);
         name.setGravity(Gravity.CENTER);
         center.addView(name);
         TextView note = new TextView(this);
-        note.setText("Vista del juego tipo nativo — el motor de emulación de PS2 no está incluido en esta app.");
+        note.setText("Vista de controles — este es el mando de referencia.\n"
+                + "El juego se abre en el motor de PS2 que tengas instalado, "
+                + "desde el botón Jugar de la ficha del juego.");
         note.setTextSize(12);
         note.setTextColor(Color.rgb(160, 160, 170));
         note.setGravity(Gravity.CENTER);
@@ -76,25 +100,32 @@ public class PlayerActivity extends Activity {
         timerView.setTextSize(15);
         timerView.setTextColor(Color.rgb(140, 220, 140));
         timerView.setGravity(Gravity.CENTER);
-        timerView.setPadding(0, 8, 0, 0);
+        timerView.setPadding(0, dp(8), 0, 0);
         center.addView(timerView);
         pressedView = new TextView(this);
         pressedView.setText("Tocá el mando 👇");
         pressedView.setTextColor(Color.rgb(200, 200, 210));
         pressedView.setGravity(Gravity.CENTER);
-        pressedView.setPadding(0, 6, 0, 0);
+        pressedView.setPadding(0, dp(6), 0, 0);
         center.addView(pressedView);
-        root.addView(center, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams centerLp = new FrameLayout.LayoutParams(dp(300),
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        centerLp.gravity = Gravity.CENTER;
+        root.addView(center, centerLp);
 
-        // Fila superior: L2 L1 | guardado / salir | R1 R2
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER);
-        top.addView(padButton("L2", 18));
-        top.addView(padButton("L1", 18));
+        // ---- Gatillos: L2 L1 (izquierda) y R1 R2 (derecha), píldoras chicas -
+        root.addView(pillButton("L2"), flp(62, 32, Gravity.TOP | Gravity.LEFT, 12, 10, 0, 0));
+        root.addView(pillButton("L1"), flp(62, 32, Gravity.TOP | Gravity.LEFT, 82, 10, 0, 0));
+        root.addView(pillButton("R1"), flp(62, 32, Gravity.TOP | Gravity.RIGHT, 0, 10, 82, 0));
+        root.addView(pillButton("R2"), flp(62, 32, Gravity.TOP | Gravity.RIGHT, 0, 10, 12, 0));
+
+        // ---- Arriba-centro: guardado rápido y salir, botones chicos --------
+        LinearLayout topCenter = new LinearLayout(this);
+        topCenter.setOrientation(LinearLayout.HORIZONTAL);
+        topCenter.setGravity(Gravity.CENTER);
         Button save = new Button(this);
         save.setText("💾 Guardado rápido");
+        save.setTextSize(12);
         save.setOnClickListener(v -> {
             Game fresh = Store.find(this, game.id);
             if (fresh != null) {
@@ -104,79 +135,69 @@ public class PlayerActivity extends Activity {
             }
             Toast.makeText(this, "Guardado rápido creado", Toast.LENGTH_SHORT).show();
         });
-        top.addView(save);
+        topCenter.addView(save, new LinearLayout.LayoutParams(dp(150), dp(38)));
         Button exit = new Button(this);
         exit.setText("Salir");
+        exit.setTextSize(12);
         exit.setOnClickListener(v -> finish());
-        top.addView(exit);
-        top.addView(padButton("R1", 18));
-        top.addView(padButton("R2", 18));
-        FrameLayout.LayoutParams topLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        topLp.gravity = Gravity.TOP;
-        root.addView(top, topLp);
+        LinearLayout.LayoutParams exitLp = new LinearLayout.LayoutParams(dp(70), dp(38));
+        exitLp.leftMargin = dp(8);
+        topCenter.addView(exit, exitLp);
+        FrameLayout.LayoutParams tcLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        tcLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        tcLp.topMargin = dp(8);
+        root.addView(topCenter, tcLp);
 
-        // Zona inferior: [cruceta + stick izq.] | SELECT/START | [acción + stick der.]
-        LinearLayout bottom = new LinearLayout(this);
-        bottom.setOrientation(LinearLayout.HORIZONTAL);
-        bottom.setGravity(Gravity.BOTTOM);
-        bottom.setPadding(16, 0, 16, 12);
+        // ---- Cruceta en cruz (izquierda): 4 botones fijos + centro ---------
+        FrameLayout dpad = new FrameLayout(this);
+        View hub = new View(this);
+        GradientDrawable hubBg = new GradientDrawable();
+        hubBg.setShape(GradientDrawable.RECTANGLE);
+        hubBg.setCornerRadius(dp(10));
+        hubBg.setColor(Color.argb(220, 38, 38, 46));
+        hub.setBackground(hubBg);
+        dpad.addView(hub, flp(50, 50, Gravity.CENTER, 0, 0, 0, 0));
+        dpad.addView(dpadButton("▲"), flp(50, 50, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 0));
+        dpad.addView(dpadButton("◀"), flp(50, 50, Gravity.LEFT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
+        dpad.addView(dpadButton("▶"), flp(50, 50, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
+        dpad.addView(dpadButton("▼"), flp(50, 50, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 0));
+        root.addView(dpad, flp(150, 150, Gravity.TOP | Gravity.LEFT, 12, 52, 0, 0));
 
-        LinearLayout leftCluster = new LinearLayout(this);
-        leftCluster.setOrientation(LinearLayout.VERTICAL);
-        leftCluster.setGravity(Gravity.CENTER);
-        LinearLayout dpad = new LinearLayout(this);
-        dpad.setOrientation(LinearLayout.VERTICAL);
-        dpad.setGravity(Gravity.CENTER);
-        dpad.addView(centered(padButton("▲", 18)));
-        LinearLayout mid = new LinearLayout(this);
-        mid.setOrientation(LinearLayout.HORIZONTAL);
-        mid.addView(padButton("◀", 18));
-        mid.addView(padButton("●", 18));
-        mid.addView(padButton("▶", 18));
-        dpad.addView(mid);
-        dpad.addView(centered(padButton("▼", 18)));
-        leftCluster.addView(dpad);
+        // ---- Rombo de acciones (derecha): botones CIRCULARES ---------------
+        FrameLayout diamond = new FrameLayout(this);
+        diamond.addView(actionButton("△", Color.rgb(46, 204, 113)),
+                flp(60, 60, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 0));   // verde
+        diamond.addView(actionButton("□", Color.rgb(255, 105, 180)),
+                flp(60, 60, Gravity.LEFT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));     // rosa
+        diamond.addView(actionButton("○", Color.rgb(231, 76, 60)),
+                flp(60, 60, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));    // rojo
+        diamond.addView(actionButton("✕", Color.rgb(52, 152, 219)),
+                flp(60, 60, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 0)); // azul
+        root.addView(diamond, flp(180, 180, Gravity.TOP | Gravity.RIGHT, 0, 52, 12, 0));
+
+        // ---- Sticks analógicos: esquinas inferiores, tamaño fijo -----------
         JoystickView leftStick = new JoystickView(this, "Stick izquierdo", "L3");
         leftStick.setListener(stickListener());
-        leftStick.setLayoutParams(new LinearLayout.LayoutParams(300, 300));
-        leftCluster.addView(leftStick);
-        bottom.addView(leftCluster);
+        root.addView(leftStick, flp(112, 112, Gravity.BOTTOM | Gravity.LEFT, 24, 0, 0, 10));
 
+        JoystickView rightStick = new JoystickView(this, "Stick derecho", "R3");
+        rightStick.setListener(stickListener());
+        root.addView(rightStick, flp(112, 112, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, 24, 10));
+
+        // ---- SELECT / START: chicos, abajo-centro ---------------------------
         LinearLayout startSel = new LinearLayout(this);
         startSel.setOrientation(LinearLayout.HORIZONTAL);
         startSel.setGravity(Gravity.CENTER);
-        startSel.addView(padButton("SELECT", 12));
-        startSel.addView(padButton("START", 12));
-        LinearLayout.LayoutParams ssLp = new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        startSel.setLayoutParams(ssLp);
-        bottom.addView(startSel);
-
-        LinearLayout rightCluster = new LinearLayout(this);
-        rightCluster.setOrientation(LinearLayout.VERTICAL);
-        rightCluster.setGravity(Gravity.CENTER);
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.VERTICAL);
-        actions.setGravity(Gravity.CENTER);
-        actions.addView(centered(actionButton("△", Color.rgb(46, 204, 113))));   // verde
-        LinearLayout mid2 = new LinearLayout(this);
-        mid2.setOrientation(LinearLayout.HORIZONTAL);
-        mid2.addView(actionButton("□", Color.rgb(255, 105, 180)));                 // rosa
-        mid2.addView(actionButton("○", Color.rgb(231, 76, 60)));                  // rojo
-        actions.addView(mid2);
-        actions.addView(centered(actionButton("✕", Color.rgb(52, 152, 219))));    // azul
-        rightCluster.addView(actions);
-        JoystickView rightStick = new JoystickView(this, "Stick derecho", "R3");
-        rightStick.setListener(stickListener());
-        rightStick.setLayoutParams(new LinearLayout.LayoutParams(300, 300));
-        rightCluster.addView(rightStick);
-        bottom.addView(rightCluster);
-
-        FrameLayout.LayoutParams botLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        botLp.gravity = Gravity.BOTTOM;
-        root.addView(bottom, botLp);
+        startSel.addView(pillButton("SELECT"), new LinearLayout.LayoutParams(dp(66), dp(30)));
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(dp(66), dp(30));
+        startLp.leftMargin = dp(10);
+        startSel.addView(pillButton("START"), startLp);
+        FrameLayout.LayoutParams ssLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        ssLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        ssLp.bottomMargin = dp(12);
+        root.addView(startSel, ssLp);
 
         setContentView(root);
         startMs = System.currentTimeMillis();
@@ -199,35 +220,64 @@ public class PlayerActivity extends Activity {
         };
     }
 
-    private LinearLayout centered(View v) {
-        LinearLayout l = new LinearLayout(this);
-        l.setGravity(Gravity.CENTER);
-        l.addView(v);
-        return l;
-    }
-
-    private Button actionButton(String label, int color) {
-        Button b = padButton(label, 20);
-        b.setTextColor(color);
-        return b;
-    }
-
-    private Button padButton(String label, int textSize) {
+    /** Comportamiento común: feedback visual + háptico + texto de estado. */
+    private Button baseButton(String label, int textSize) {
         Button b = new Button(this);
         b.setText(label);
         b.setTextSize(textSize);
-        b.setAlpha(0.85f);
+        b.setTextColor(Color.WHITE);
+        b.setAllCaps(false);
+        b.setAlpha(0.9f);
         b.setOnTouchListener((view, ev) -> {
             if (ev.getAction() == MotionEvent.ACTION_DOWN) {
-                view.setAlpha(0.5f);
+                view.setAlpha(0.55f);
                 vibrate();
                 pressedView.setText("Botón: " + label);
             } else if (ev.getAction() == MotionEvent.ACTION_UP
                     || ev.getAction() == MotionEvent.ACTION_CANCEL) {
-                view.setAlpha(0.85f);
+                view.setAlpha(0.9f);
             }
             return false;
         });
+        return b;
+    }
+
+    /** Botón de acción circular con el color clásico de PlayStation. */
+    private Button actionButton(String label, int color) {
+        Button b = baseButton(label, 24);
+        b.setTextColor(color);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.OVAL);
+        bg.setColor(Color.argb(225, 42, 42, 52));
+        bg.setStroke(dp(2), color);
+        b.setBackground(bg);
+        b.setPadding(0, 0, 0, 0);
+        return b;
+    }
+
+    /** Botón de cruceta cuadrado con esquinas apenas redondeadas. */
+    private Button dpadButton(String label) {
+        Button b = baseButton(label, 20);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(10));
+        bg.setColor(Color.argb(225, 52, 52, 62));
+        bg.setStroke(dp(1), Color.argb(160, 255, 255, 255));
+        b.setBackground(bg);
+        b.setPadding(0, 0, 0, 0);
+        return b;
+    }
+
+    /** Píldora chica para L1/L2/R1/R2/SELECT/START. */
+    private Button pillButton(String label) {
+        Button b = baseButton(label, 12);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(16));
+        bg.setColor(Color.argb(225, 58, 58, 70));
+        bg.setStroke(dp(1), Color.argb(140, 255, 255, 255));
+        b.setBackground(bg);
+        b.setPadding(0, 0, 0, 0);
         return b;
     }
 

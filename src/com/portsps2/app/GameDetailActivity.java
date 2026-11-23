@@ -89,22 +89,25 @@ public class GameDetailActivity extends Activity {
         root.addView(portView);
 
         Button play = new Button(this);
-        play.setText("▶  Jugar — pantalla completa");
+        play.setText("▶  Jugar — abrir en el emulador");
         play.setTextSize(19);
         play.setPadding(0, 24, 0, 24);
         LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         playLp.topMargin = 28;
         play.setLayoutParams(playLp);
-        play.setOnClickListener(v -> {
-            game.playCount++;
-            game.lastPlayedAt = System.currentTimeMillis();
-            Store.upsert(this, game);
-            Intent i = new Intent(this, PlayerActivity.class);
-            i.putExtra("gameId", game.id);
-            startActivity(i);
-        });
+        play.setOnClickListener(v -> playGame());
         root.addView(play);
+
+        Button controls = new Button(this);
+        controls.setText("🎮 Vista de controles (mando de referencia)");
+        controls.setTextSize(15);
+        LinearLayout.LayoutParams ctLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ctLp.topMargin = 12;
+        controls.setLayoutParams(ctLp);
+        controls.setOnClickListener(v -> openControlsView());
+        root.addView(controls);
 
         Button shortcut = new Button(this);
         shortcut.setText("📌 Crear acceso directo en la pantalla de inicio");
@@ -190,6 +193,87 @@ public class GameDetailActivity extends Activity {
 
         setContentView(root);
         refreshDynamic();
+    }
+
+    /** Abre la vista de controles (PlayerActivity) como pantalla secundaria. */
+    private void openControlsView() {
+        Intent i = new Intent(this, PlayerActivity.class);
+        i.putExtra("gameId", game.id);
+        startActivity(i);
+    }
+
+    /**
+     * Jugar de verdad: el juego se abre en el motor de PS2 instalado en el
+     * teléfono (AetherSX2/NetherSX2/ARMSX2/Play!). Ports PS2 no incluye
+     * emulador propio.
+     */
+    private void playGame() {
+        boolean ported = game.installed && game.localPath != null && !game.localPath.isEmpty()
+                && new File(game.localPath).isFile();
+        if (!ported) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Este juego todavía no está porteado")
+                    .setMessage("«" + game.name + "» está en la biblioteca pero su imagen "
+                            + "todavía no quedó instalada dentro de la app, así que no hay "
+                            + "nada para abrir en el emulador.\n\n"
+                            + "Volvé a la pantalla principal e importá de nuevo su archivo "
+                            + "ZIP o ISO: al terminar el port, el botón Jugar lo va a abrir "
+                            + "en tu emulador.")
+                    .setPositiveButton("Entendido", null)
+                    .show();
+            return;
+        }
+        java.util.List<Emulators.Def> installed = EmulatorLauncher.installed(this);
+        if (installed.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Falta un motor de PS2")
+                    .setMessage("El juego está porteado y listo, pero para cargarlo hace "
+                            + "falta un emulador de PS2 instalado en el teléfono "
+                            + "(AetherSX2, NetherSX2, ARMSX2 o Play!). Ports PS2 no "
+                            + "incluye el motor: organiza tus juegos y los abre en el "
+                            + "emulador que tengas.\n\n"
+                            + "Instalá uno, configurá en él la BIOS de tu propia PS2, "
+                            + "y volvé a tocar Jugar.")
+                    .setPositiveButton("Buscar emulador",
+                            (d, w) -> EmulatorLauncher.openStoreSearch(this))
+                    .setNeutralButton("Ver controles igual", (d, w) -> openControlsView())
+                    .setNegativeButton("Cancelar", null)
+                    .show();
+            return;
+        }
+        if (installed.size() == 1) {
+            launchIn(installed.get(0));
+            return;
+        }
+        String[] names = new String[installed.size()];
+        for (int i = 0; i < installed.size(); i++) names[i] = installed.get(i).name;
+        new AlertDialog.Builder(this)
+                .setTitle("¿En qué emulador querés abrirlo?")
+                .setItems(names, (d, which) -> launchIn(installed.get(which)))
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    /** Lanza el juego en el emulador elegido y registra el historial. */
+    private void launchIn(Emulators.Def def) {
+        Toast.makeText(this, "Abriendo «" + game.name + "» en " + def.name + "…",
+                Toast.LENGTH_SHORT).show();
+        boolean ok = EmulatorLauncher.launch(this, def, game);
+        if (ok) {
+            game.playCount++;
+            game.lastPlayedAt = System.currentTimeMillis();
+            Store.upsert(this, game);
+            refreshDynamic();
+        } else {
+            new AlertDialog.Builder(this)
+                    .setTitle("El emulador no aceptó el juego")
+                    .setMessage(def.name + " no pudo abrir «" + game.name + "» desde "
+                            + "Ports PS2. Probá abriendo el emulador y cargando el "
+                            + "juego desde ahí, o con otro emulador si tenés más de uno.")
+                    .setPositiveButton("Entendido", null)
+                    .setNeutralButton("Ver controles", (d, w) -> openControlsView())
+                    .show();
+        }
     }
 
     private void refreshDynamic() {
