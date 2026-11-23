@@ -17,6 +17,9 @@ public class Game {
     public long addedAt = 0;
     public String sourceUri = "";   // Uri (SAF) del archivo origen, con permiso persistente
     public boolean verified = true; // ISO: firma CD001 verificada; si no, "sin verificar"
+    public String localPath = "";   // v1.2: ruta local de la imagen ya porteada ("" = sin portear)
+    public boolean installed = false; // v1.2: true si el port real terminó bien
+    public long installedSize = 0;  // v1.2: bytes reales instalados en localPath
     public int playCount = 0;
     public long lastPlayedAt = 0;
     public ArrayList<String> saves = new ArrayList<>();
@@ -34,6 +37,9 @@ public class Game {
             o.put("addedAt", addedAt);
             o.put("sourceUri", sourceUri);
             o.put("verified", verified);
+            o.put("localPath", localPath);
+            o.put("installed", installed);
+            o.put("installedSize", installedSize);
             o.put("playCount", playCount);
             o.put("lastPlayedAt", lastPlayedAt);
             JSONArray arr = new JSONArray();
@@ -55,6 +61,9 @@ public class Game {
         g.addedAt = o.optLong("addedAt");
         g.sourceUri = o.optString("sourceUri", "");
         g.verified = o.optBoolean("verified", true); // datos v1.0 sin el campo: verificados
+        g.localPath = o.optString("localPath", "");  // datos v1.1: sin portear
+        g.installed = o.optBoolean("installed", false);
+        g.installedSize = o.optLong("installedSize", 0);
         g.playCount = o.optInt("playCount");
         g.lastPlayedAt = o.optLong("lastPlayedAt");
         JSONArray arr = o.optJSONArray("saves");

@@ -13,9 +13,11 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
@@ -33,8 +35,11 @@ public class MainActivity extends Activity {
     private TextView emptyView;
     private TextView statusView;
     private Button importBtn;
+    private ProgressBar progressBar;
+    private Button cancelBtn;
     private ArrayList<Game> games = new ArrayList<>();
     private volatile boolean importing = false;
+    private volatile boolean cancelRequested = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,8 +57,8 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Tu pantalla de juegos tipo nativo. Importá juegos de PS2 desde un ZIP "
-                + "(detecta la imagen de adentro sin descomprimirla) o desde una ISO directa.\n"
+        sub.setText("Tu pantalla de juegos tipo nativo. Al importar un ZIP o una ISO, el juego "
+                + "se PORTEA de verdad: la imagen queda instalada dentro de la app, en su propia carpeta.\n"
                 + "Nota honesta: esta app es el importador/launcher. No incluye un emulador de PS2.");
         sub.setTextSize(14);
         sub.setTextColor(Color.rgb(180, 180, 190));
@@ -72,6 +77,24 @@ public class MainActivity extends Activity {
         statusView.setTextColor(Color.rgb(140, 220, 140));
         statusView.setPadding(0, 14, 0, 0);
         root.addView(statusView);
+
+        progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progressBar.setMax(1000);
+        progressBar.setVisibility(View.GONE);
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        pbLp.topMargin = 10;
+        progressBar.setLayoutParams(pbLp);
+        root.addView(progressBar);
+
+        cancelBtn = new Button(this);
+        cancelBtn.setText("Cancelar port");
+        cancelBtn.setVisibility(View.GONE);
+        cancelBtn.setOnClickListener(v -> {
+            cancelRequested = true;
+            statusView.setText("Cancelando el port…");
+        });
+        root.addView(cancelBtn);
 
         TextView hint = new TextView(this);
         hint.setText("Mantené apretado un juego para crear su acceso directo en la pantalla de inicio.");
@@ -135,6 +158,7 @@ public class MainActivity extends Activity {
             String row = "🎮  " + g.name + "\nDesde " + g.origin + " · " + Store.fmtSize(
                     g.isoSize > 0 ? g.isoSize : g.fileSize);
             if ("ISO".equals(g.origin) && !g.verified) row += " · sin verificar";
+            row += g.installed ? " · ✓ Porteado" : " · sin portear (reimportar)";
             rows.add(row);
         }
         listView.setAdapter(new ArrayAdapter<>(this,
@@ -174,6 +198,7 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {
             // Algunos proveedores no dan permiso persistente; la importación sigue igual.
         }
+        cancelRequested = false;
         setImporting(true, "Leyendo el archivo… no cierres la app.");
         new Thread(() -> importFile(uri)).start();
     }
@@ -183,7 +208,36 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
             importBtn.setEnabled(!on);
             statusView.setText(msg == null ? "" : msg);
+            progressBar.setVisibility(on ? View.VISIBLE : View.GONE);
+            cancelBtn.setVisibility(on ? View.VISIBLE : View.GONE);
+            if (on) progressBar.setProgress(0);
         });
+    }
+
+    /** Listener del motor de port: progreso en la UI + cancelación. */
+    private PortEngine.Listener portListener(String gameName) {
+        return new PortEngine.Listener() {
+            @Override public void onProgress(long copied, long expected) {
+                runOnUiThread(() -> {
+                    if (expected > 0) {
+                        progressBar.setProgress((int) (copied * 1000 / expected));
+                        statusView.setText("Porteando «" + gameName + "»… "
+                                + (copied * 100 / expected) + "% ("
+                                + Store.fmtSize(copied) + " de " + Store.fmtSize(expected) + ")");
+                    } else {
+                        statusView.setText("Porteando «" + gameName + "»… "
+                                + Store.fmtSize(copied) + " copiados");
+                    }
+                });
+            }
+            @Override public boolean isCancelled() { return cancelRequested; }
+        };
+    }
+
+    /** Carpeta propia del juego dentro del almacenamiento interno de la app. */
+    private File gameDirFor(Game g) {
+        return new File(new File(getFilesDir(), "games"),
+                PortEngine.sanitizeDirName(g.name, g.id) + "_" + g.id);
     }
 
     private void finishImport(String msg) {
@@ -210,6 +264,11 @@ public class MainActivity extends Activity {
                 if (b1 == 'P' && b2 == 'K') importZip(uri, fileName, fileSize);
                 else importIso(uri, fileName, fileSize);
             }
+        } catch (PortEngine.CancelledException e) {
+            finishImport("Port cancelado. No se instaló nada y no quedó ningún juego "
+                    + "a medias en la biblioteca.");
+        } catch (PortEngine.PortException e) {
+            finishImport(e.getMessage());
         } catch (SecurityException e) {
             finishImport("Android no nos dejó leer ese archivo (permiso denegado). "
                     + "Volvé a importarlo eligiéndolo desde la app Archivos.");
@@ -268,9 +327,31 @@ public class MainActivity extends Activity {
         g.addedAt = System.currentTimeMillis();
         g.sourceUri = uri.toString();
         g.verified = true;
+
+        // PORT REAL v1.2: extraer la imagen a la carpeta propia del juego.
+        // El juego se registra en la biblioteca SOLO si el port termina bien.
+        File dir = gameDirFor(g);
+        InputStream zin = getContentResolver().openInputStream(uri);
+        if (zin == null) throw new FileNotFoundException("sin stream");
+        PortEngine.Result r;
+        try {
+            r = PortEngine.portFromZip(zin, dir, image.name, image.uncompressedSize,
+                    portListener(g.name));
+        } catch (Exception e) {
+            PortEngine.deleteRecursively(dir); // sin entradas ni archivos a medias
+            throw e;
+        }
+        g.localPath = r.file.getAbsolutePath();
+        g.installed = true;
+        g.installedSize = r.size;
+        g.isoSize = r.size;
+        try {
+            PortEngine.writePortJson(dir, g.name, g.origin, r.file.getName(), r.size,
+                    System.currentTimeMillis());
+        } catch (Exception ignored) { }
         Store.upsert(this, g);
-        finishImport("Juego importado desde ZIP: " + g.name
-                + " (imagen " + image.name + ", " + Store.fmtSize(image.uncompressedSize) + ")");
+        finishImport("¡Port listo! «" + g.name + "» quedó instalado dentro de la app ("
+                + Store.fmtSize(r.size) + ", desde el ZIP).");
     }
 
     /**
@@ -278,7 +359,7 @@ public class MainActivity extends Activity {
      * volumen; si no verifica (o el archivo es chico/truncado), se importa igual
      * marcado como "sin verificar", con aviso.
      */
-    private void importIso(Uri uri, String fileName, long fileSize) {
+    private void importIso(Uri uri, String fileName, long fileSize) throws Exception {
         byte[] head = new byte[IsoCheck.HEADER_SIZE];
         int read = 0;
         try {
@@ -313,12 +394,46 @@ public class MainActivity extends Activity {
         g.addedAt = System.currentTimeMillis();
         g.sourceUri = uri.toString();
         g.verified = check.verified;
+
+        // PORT REAL v1.2: copiar la imagen a la carpeta propia del juego.
+        // Se registra en la biblioteca SOLO si la copia termina bien.
+        String ext = "iso";
+        String lowerName = fileName.toLowerCase();
+        int edot = lowerName.lastIndexOf('.');
+        if (edot >= 0) {
+            String cand = lowerName.substring(edot + 1);
+            if (cand.equals("iso") || cand.equals("bin") || cand.equals("img") || cand.equals("chd")) {
+                ext = cand;
+            }
+        }
+        File dir = gameDirFor(g);
+        InputStream cin = getContentResolver().openInputStream(uri);
+        if (cin == null) throw new FileNotFoundException("sin stream");
+        PortEngine.Result r;
+        try {
+            r = PortEngine.portFromImage(cin, dir, ext, fileSize, portListener(g.name));
+        } catch (Exception e) {
+            PortEngine.deleteRecursively(dir); // sin entradas ni archivos a medias
+            throw e;
+        } finally {
+            try { cin.close(); } catch (Exception ignored) { }
+        }
+        g.localPath = r.file.getAbsolutePath();
+        g.installed = true;
+        g.installedSize = r.size;
+        g.isoSize = r.size;
+        try {
+            PortEngine.writePortJson(dir, g.name, g.origin, r.file.getName(), r.size,
+                    System.currentTimeMillis());
+        } catch (Exception ignored) { }
         Store.upsert(this, g);
         if (check.verified) {
-            finishImport("Juego importado desde ISO: " + g.name);
+            finishImport("¡Port listo! «" + g.name + "» quedó instalado dentro de la app ("
+                    + Store.fmtSize(r.size) + ").");
         } else {
-            finishImport("Juego importado SIN VERIFICAR: " + g.name
-                    + ". No se encontró la firma de una ISO estándar, pero lo agregamos igual a tu biblioteca.");
+            finishImport("¡Port listo, SIN VERIFICAR! «" + g.name + "» quedó instalado dentro "
+                    + "de la app (" + Store.fmtSize(r.size) + "). No se encontró la firma de "
+                    + "una ISO estándar, pero se porteó igual.");
         }
     }
 

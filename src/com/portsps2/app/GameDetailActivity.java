@@ -14,11 +14,14 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.ArrayList;
 
 public class GameDetailActivity extends Activity {
     private Game game;
     private TextView historyView;
+    private TextView portView;
+    private Button deletePortBtn;
     private ListView savesList;
 
     @Override
@@ -78,6 +81,12 @@ public class GameDetailActivity extends Activity {
         data.setTextColor(Color.rgb(180, 180, 190));
         data.setGravity(Gravity.CENTER);
         root.addView(data);
+
+        portView = new TextView(this);
+        portView.setTextSize(14);
+        portView.setGravity(Gravity.CENTER);
+        portView.setPadding(0, 12, 0, 0);
+        root.addView(portView);
 
         Button play = new Button(this);
         play.setText("▶  Jugar — pantalla completa");
@@ -145,6 +154,30 @@ public class GameDetailActivity extends Activity {
                         .show());
         root.addView(savesList);
 
+        deletePortBtn = new Button(this);
+        deletePortBtn.setText("Borrar archivos del port");
+        deletePortBtn.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Borrar archivos del port")
+                .setMessage("Se borra la copia instalada dentro de la app ("
+                        + Store.fmtSize(game.installedSize) + "). Tu archivo ZIP/ISO original "
+                        + "no se toca, y el juego sigue en la biblioteca como «sin portear».")
+                .setPositiveButton("Borrar", (d, w) -> {
+                    if (!game.localPath.isEmpty()) {
+                        File f = new File(game.localPath);
+                        File dir = f.getParentFile();
+                        PortEngine.deleteRecursively(dir != null ? dir : f);
+                    }
+                    game.installed = false;
+                    game.localPath = "";
+                    game.installedSize = 0;
+                    Store.upsert(this, game);
+                    refreshDynamic();
+                    Toast.makeText(this, "Archivos del port borrados", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show());
+        root.addView(deletePortBtn);
+
         Button del = new Button(this);
         del.setText("Quitar juego de la biblioteca");
         del.setOnClickListener(v -> new AlertDialog.Builder(this)
@@ -161,6 +194,22 @@ public class GameDetailActivity extends Activity {
 
     private void refreshDynamic() {
         if (historyView == null) return;
+        if (portView != null) {
+            if (game.installed) {
+                portView.setText("Estado: ✓ Porteado / instalado dentro de la app\n"
+                        + "Archivo local: " + game.localPath + "\n"
+                        + "Tamaño instalado: " + Store.fmtSize(game.installedSize));
+                portView.setTextColor(Color.rgb(140, 220, 140));
+            } else {
+                portView.setText("Estado: solo registrado, sin portear.\n"
+                        + "Este juego se importó con una versión anterior: para portearlo "
+                        + "de verdad, volvé a importarlo desde la pantalla principal.");
+                portView.setTextColor(Color.rgb(230, 190, 120));
+            }
+        }
+        if (deletePortBtn != null) {
+            deletePortBtn.setVisibility(game.installed ? android.view.View.VISIBLE : android.view.View.GONE);
+        }
         historyView.setText("Historial: abierto " + game.playCount + " veces · Última vez: "
                 + Store.fmtDate(game.lastPlayedAt));
         ArrayList<String> rows = new ArrayList<>();
