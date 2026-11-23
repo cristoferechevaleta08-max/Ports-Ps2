@@ -26,7 +26,7 @@ export ANDROID_HOME=/ruta/al/android-sdk
 
 Eso genera **`app-debug.apk`** en la raíz del repo, firmado con un keystore debug generado automáticamente (solo para instalar y probar; no es una firma de publicación).
 
-También hay un workflow de GitHub Actions (`.github/workflows/build-apk.yml`) que compila el APK en cada push y lo deja como artifact descargable.
+Está previsto un workflow de GitHub Actions (`.github/workflows/build-apk.yml`) que compila el APK en cada push y lo deja como artifact descargable. Nota: ese archivo todavía no está en el repo porque subir workflows requiere el scope `workflow` en el token de GitHub (`gh auth refresh -s workflow`); el resto del proyecto ya compila localmente con `./build-apk.sh`.
 
 ## Datos técnicos
 
