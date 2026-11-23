@@ -67,9 +67,13 @@ public class GameDetailActivity extends Activity {
         root.addView(name);
 
         TextView data = new TextView(this);
+        String verifiedLine = "ISO".equals(game.origin)
+                ? (game.verified ? "\nVerificación: ISO 9660 verificada ✓"
+                                  : "\n⚠ Sin verificar: no se encontró la firma CD001, pero se importó igual.")
+                : "";
         data.setText("Origen: " + game.origin + "  ·  Archivo: " + game.fileName
                 + "\nISO: " + game.isoName + "  ·  " + Store.fmtSize(game.isoSize > 0 ? game.isoSize : game.fileSize)
-                + "\nImportado: " + Store.fmtDate(game.addedAt));
+                + "\nImportado: " + Store.fmtDate(game.addedAt) + verifiedLine);
         data.setTextSize(14);
         data.setTextColor(Color.rgb(180, 180, 190));
         data.setGravity(Gravity.CENTER);
@@ -92,6 +96,16 @@ public class GameDetailActivity extends Activity {
             startActivity(i);
         });
         root.addView(play);
+
+        Button shortcut = new Button(this);
+        shortcut.setText("📌 Crear acceso directo en la pantalla de inicio");
+        shortcut.setTextSize(15);
+        LinearLayout.LayoutParams scLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        scLp.topMargin = 12;
+        shortcut.setLayoutParams(scLp);
+        shortcut.setOnClickListener(v -> ShortcutHelper.createShortcut(this, game));
+        root.addView(shortcut);
 
         historyView = new TextView(this);
         historyView.setTextColor(Color.rgb(170, 170, 180));

@@ -15,6 +15,8 @@ public class Game {
     public String isoName = "";     // ISO interna (en ZIP) o volumen (ISO directa)
     public long isoSize = 0;        // tamaño real de la ISO interna
     public long addedAt = 0;
+    public String sourceUri = "";   // Uri (SAF) del archivo origen, con permiso persistente
+    public boolean verified = true; // ISO: firma CD001 verificada; si no, "sin verificar"
     public int playCount = 0;
     public long lastPlayedAt = 0;
     public ArrayList<String> saves = new ArrayList<>();
@@ -30,6 +32,8 @@ public class Game {
             o.put("isoName", isoName);
             o.put("isoSize", isoSize);
             o.put("addedAt", addedAt);
+            o.put("sourceUri", sourceUri);
+            o.put("verified", verified);
             o.put("playCount", playCount);
             o.put("lastPlayedAt", lastPlayedAt);
             JSONArray arr = new JSONArray();
@@ -49,6 +53,8 @@ public class Game {
         g.isoName = o.optString("isoName");
         g.isoSize = o.optLong("isoSize");
         g.addedAt = o.optLong("addedAt");
+        g.sourceUri = o.optString("sourceUri", "");
+        g.verified = o.optBoolean("verified", true); // datos v1.0 sin el campo: verificados
         g.playCount = o.optInt("playCount");
         g.lastPlayedAt = o.optLong("lastPlayedAt");
         JSONArray arr = o.optJSONArray("saves");
